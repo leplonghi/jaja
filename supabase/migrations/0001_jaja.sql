@@ -32,34 +32,17 @@ security definer
 set search_path = ''
 as $$
 declare
-  base_name text;
-  base_handle text;
   candidate text;
 begin
-  base_name := coalesce(
-    nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
-    nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
-    split_part(coalesce(new.email, 'previsor'), '@', 1)
-  );
-  base_handle := lower(regexp_replace(
-    split_part(coalesce(new.email, base_name), '@', 1), '[^a-zA-Z0-9]+', '_', 'g'
-  ));
-  base_handle := trim(both '_' from base_handle);
-  if char_length(base_handle) < 3 then
-    base_handle := 'previsor';
-  end if;
-  base_handle := left(base_handle, 14);
-
-  candidate := base_handle;
-  while exists (select 1 from public.profiles where handle = candidate) loop
-    candidate := base_handle || '_' || substr(md5(random()::text), 1, 5);
+  -- Identificadores públicos NUNCA vêm do e-mail nem da conta do provedor
+  -- (nome e foto podem identificar a pessoa). Ela escolhe handle e nome na
+  -- confirmação inicial, via complete_onboarding().
+  loop
+    candidate := 'previsor_' || encode(extensions.gen_random_bytes(3), 'hex');
+    exit when not exists (select 1 from public.profiles where handle = candidate);
   end loop;
 
-  insert into public.profiles (id, handle, display_name, avatar_url)
-  values (
-    new.id, candidate, left(base_name, 60),
-    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')
-  );
+  insert into public.profiles (id, handle, display_name) values (new.id, candidate, 'Previsor');
   return new;
 end;
 $$;
@@ -294,8 +277,11 @@ create policy terms_staff_delete on public.moderation_terms for delete using (pu
 
 revoke all on public.profiles, public.topics, public.topic_options, public.predictions,
               public.reports, public.moderation_terms from anon, authenticated;
-grant select on public.profiles, public.topics, public.topic_options to anon, authenticated;
-grant update (handle, display_name, avatar_url) on public.profiles to authenticated;
+grant select on public.topics, public.topic_options to anon, authenticated;
+-- Só as colunas públicas do perfil: is_staff e onboarded_at NÃO são expostas.
+-- O próprio usuário lê o restante pela função my_profile().
+grant select (id, handle, display_name, avatar_url, created_at) on public.profiles to anon, authenticated;
+grant update (handle, display_name) on public.profiles to authenticated;
 grant select on public.predictions, public.reports to authenticated;
 grant select, insert, delete on public.moderation_terms to authenticated;
 
@@ -576,12 +562,17 @@ end;
 $$;
 
 -- ------------------------------------------------------------ mutações ------
-create or replace function public.complete_onboarding(p_adult_ok boolean, p_terms_ok boolean)
+create or replace function public.complete_onboarding(
+  p_adult_ok boolean, p_terms_ok boolean, p_handle text, p_display_name text
+)
 returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  h text := lower(trim(coalesce(p_handle, '')));
+  n text := trim(coalesce(p_display_name, ''));
 begin
   if auth.uid() is null then
     raise exception 'not_authenticated' using errcode = '28000';
@@ -589,8 +580,36 @@ begin
   if not (coalesce(p_adult_ok, false) and coalesce(p_terms_ok, false)) then
     raise exception 'onboarding_incomplete' using errcode = '22023';
   end if;
-  update public.profiles set onboarded_at = coalesce(onboarded_at, now()) where id = auth.uid();
+  -- Nomes reservados: evitam se passar pela equipe ou pela marca.
+  if h !~ '^[a-z0-9_]{3,20}$' or h in ('admin', 'equipe', 'staff', 'jaja', 'suporte', 'support', 'moderacao', 'moderador') then
+    raise exception 'handle_invalid' using errcode = '22023';
+  end if;
+  if char_length(n) not between 1 and 60 then
+    raise exception 'name_invalid' using errcode = '22023';
+  end if;
+  begin
+    update public.profiles
+       set handle = h, display_name = n, onboarded_at = coalesce(onboarded_at, now())
+     where id = auth.uid();
+  exception when unique_violation then
+    raise exception 'handle_taken' using errcode = '23505';
+  end;
 end;
+$$;
+
+-- O próprio perfil, com os campos que não são públicos.
+create or replace function public.my_profile()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', p.id, 'handle', p.handle, 'display_name', p.display_name, 'avatar_url', p.avatar_url,
+    'is_staff', p.is_staff, 'onboarded', p.onboarded_at is not null
+  )
+  from public.profiles p where p.id = auth.uid()
 $$;
 
 create or replace function public.create_event(
@@ -1044,7 +1063,7 @@ grant execute on function
 
 -- Ações: só quem está logado.
 grant execute on function
-  public.my_vault(), public.complete_onboarding(boolean, boolean),
+  public.my_vault(), public.my_profile(), public.complete_onboarding(boolean, boolean, text, text),
   public.create_event(text, text, text, timestamptz, timestamptz, text, text, text[], boolean),
   public.create_free_topic(text, text, text, boolean, timestamptz, timestamptz, boolean, text),
   public.seal_prediction(uuid, uuid, text, int), public.reveal_now(uuid),

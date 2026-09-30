@@ -316,10 +316,13 @@ export const en: Dict = {
   "admin.denied": "This area is for the team only.",
 
   "welcome.title": "Before you start",
-  "welcome.sub": "Two quick confirmations and you can predict.",
+  "welcome.sub": "Pick how you appear and make two quick confirmations.",
   "welcome.adult": "I confirm that I meet the minimum age to use jaja in my country ({age} or older).",
   "welcome.terms":
     "I have read and accept the Terms and the Privacy Policy, including automatic text analysis for safety.",
+  "welcome.public": "Your name and @handle are public. jaja does not use your e-mail or the name on your Google/Apple account: show whatever you like.",
+  "welcome.name": "Display name",
+  "welcome.handle": "Your @handle (3 to 20: lowercase letters, numbers and _)",
   "welcome.cta": "Continue",
 
   "auth.title": "Sign in to predict",
@@ -390,6 +393,9 @@ export const en: Dict = {
   "e.reveal_too_far": "The reveal can be at most 5 years away.",
   "e.invalid_visibility": "Invalid visibility.",
   "e.onboarding_incomplete": "Tick both confirmations to continue.",
+  "e.handle_invalid": "That @handle is not valid. Use 3 to 20 lowercase letters, numbers or _.",
+  "e.handle_taken": "That @handle is taken. Pick another one.",
+  "e.name_invalid": "The name must be 1 to 60 characters.",
   "e.rate_limited": "Too many actions in a short time. Try again later.",
   "e.check": "Check the fields: a value is outside what's allowed.",
 };

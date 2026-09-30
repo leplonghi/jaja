@@ -316,10 +316,13 @@ export const es: Dict = {
   "admin.denied": "Esta área es solo para el equipo.",
 
   "welcome.title": "Antes de empezar",
-  "welcome.sub": "Dos confirmaciones rápidas y ya puedes predecir.",
+  "welcome.sub": "Elige cómo apareces y haz dos confirmaciones rápidas.",
   "welcome.adult": "Confirmo que tengo la edad mínima exigida para usar jaja en mi país ({age} años o más).",
   "welcome.terms":
     "Leí y acepto los Términos y la Política de Privacidad, incluido el análisis automático de texto por seguridad.",
+  "welcome.public": "Tu nombre y tu @ son públicos. jaja no usa tu correo ni el nombre de tu cuenta de Google/Apple: muestra lo que quieras.",
+  "welcome.name": "Nombre visible",
+  "welcome.handle": "Tu @ (3 a 20: minúsculas, números y _)",
   "welcome.cta": "Continuar",
 
   "auth.title": "Entra para predecir",
@@ -390,6 +393,9 @@ export const es: Dict = {
   "e.reveal_too_far": "La revelación puede ser en máximo 5 años.",
   "e.invalid_visibility": "Visibilidad inválida.",
   "e.onboarding_incomplete": "Marca las dos confirmaciones para continuar.",
+  "e.handle_invalid": "Ese @ no es válido. Usa de 3 a 20 minúsculas, números o _.",
+  "e.handle_taken": "Ese @ ya está en uso. Elige otro.",
+  "e.name_invalid": "El nombre debe tener entre 1 y 60 caracteres.",
   "e.rate_limited": "Demasiadas acciones en poco tiempo. Inténtalo más tarde.",
   "e.check": "Revisa los campos: algún valor está fuera de lo permitido.",
 };

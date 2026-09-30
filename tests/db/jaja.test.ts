@@ -93,21 +93,51 @@ describe.skipIf(!ADMIN_URL)("banco de dados (RLS + funções)", () => {
   });
 
   describe("perfis e onboarding", () => {
-    it("cria o perfil automaticamente", async () => {
-      const r = await db.query("select handle, display_name, is_staff from public.profiles where id=$1", [u.ana]);
-      expect(r.rows[0]).toEqual({ handle: "ana", display_name: "ana", is_staff: false });
+    it("cria o perfil automaticamente, com @ opaco: nada vem do e-mail nem da conta do provedor", async () => {
+      const r = await db.query("select handle, display_name, avatar_url, is_staff from public.profiles where id=$1", [u.ana]);
+      expect(r.rows[0].handle).toMatch(/^previsor_[0-9a-f]{6}$/);
+      expect(r.rows[0]).toMatchObject({ display_name: "Previsor", avatar_url: null, is_staff: false });
+      expect(JSON.stringify(r.rows[0])).not.toMatch(/ana/);
     });
     it("ninguém vira equipe sozinho", async () => {
       await fails(as(u.ana, (q) => q("update public.profiles set is_staff = true where id=$1", [u.ana])), /permission denied/);
+      await fails(as(u.ana, (q) => q("update public.profiles set avatar_url = 'http://x' where id=$1", [u.ana])), /permission denied/);
       await as(u.ana, (q) => q("update public.profiles set display_name='Ana' where id=$1", [u.ana]));
+    });
+    it("anônimo e outros usuários não leem is_staff nem onboarded_at", async () => {
+      await fails(as(null, (q) => q("select is_staff from public.profiles")), /permission denied/);
+      await fails(as(null, (q) => q("select onboarded_at from public.profiles")), /permission denied/);
+      await fails(as(u.bia, (q) => q("select is_staff from public.profiles where id=$1", [u.staff])), /permission denied/);
+      await fails(as(null, (q) => q("select * from public.profiles")), /permission denied/);
+      const pub = await as(null, (q) => q("select id, handle, display_name, avatar_url from public.profiles where id=$1", [u.ana]));
+      expect(pub.rows).toHaveLength(1);
+    });
+    it("my_profile devolve só o perfil de quem chama (inclusive is_staff)", async () => {
+      await fails(rpc(null, "public.my_profile()"), /permission denied for function/);
+      const staff = await rpc(u.staff, "public.my_profile()");
+      expect(staff).toMatchObject({ id: u.staff, is_staff: true, onboarded: true });
+      const ana = await rpc(u.ana, "public.my_profile()");
+      expect(ana).toMatchObject({ id: u.ana, is_staff: false, onboarded: true });
+      expect((await rpc(u.novato, "public.my_profile()")).onboarded).toBe(false);
     });
     it("só cria ou prevê depois do onboarding completo", async () => {
       await fails(rpc(u.novato, "public.create_free_topic($1,$2,$3,$4,$5,$6,$7,$8)",
         ["Teste", "Uma previsão qualquer de teste", "public", false, null, hours(2), false, "outros"]), "not_onboarded");
-      await fails(rpc(u.novato, "public.complete_onboarding($1,$2)", [true, false]), "onboarding_incomplete");
-      await rpc(u.novato, "public.complete_onboarding($1,$2)", [true, true]);
-      const r = await db.query("select onboarded_at from public.profiles where id=$1", [u.novato]);
+      await fails(rpc(u.novato, "public.complete_onboarding($1,$2,$3,$4)", [true, false, "novato_ok", "Novato"]), "onboarding_incomplete");
+      await rpc(u.novato, "public.complete_onboarding($1,$2,$3,$4)", [true, true, "  Novato_OK ", " Novato "]);
+      const r = await db.query("select handle, display_name, onboarded_at from public.profiles where id=$1", [u.novato]);
+      expect(r.rows[0]).toMatchObject({ handle: "novato_ok", display_name: "Novato" });
       expect(r.rows[0].onboarded_at).not.toBeNull();
+    });
+    it("valida @ e nome: formato, nomes reservados e unicidade", async () => {
+      const on = (uid: string, h: string, n = "Nome") => rpc(uid, "public.complete_onboarding($1,$2,$3,$4)", [true, true, h, n]);
+      for (const bad of ["ab", "com espaço", "Acentuação", "a".repeat(21), "", "admin", "JAJA", "equipe", "staff"]) {
+        await fails(on(u.caio, bad), "handle_invalid");
+      }
+      await fails(on(u.caio, "caio_ok", "   "), "name_invalid");
+      await fails(on(u.caio, "caio_ok", "x".repeat(61)), "name_invalid");
+      await fails(on(u.caio, "novato_ok"), "handle_taken");
+      await fails(rpc(null, "public.complete_onboarding($1,$2,$3,$4)", [true, true, "anon_ok", "Anon"]), /permission denied for function/);
     });
   });
 

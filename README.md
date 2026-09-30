@@ -37,7 +37,8 @@ Tudo em `supabase/migrations/0001_jaja.sql`. O **banco** impõe, não a interfac
 1. O conteúdo de uma previsão só é entregue a outras pessoas depois da revelação, e só se não estiver retido pela moderação. Antes, só o autor (e a equipe, para moderar) lê.
 2. Previsões são imutáveis: sem `UPDATE`/`DELETE`, e só entram por `seal_prediction()` / `create_free_topic()`, com hora, `salt` e hash do servidor.
 3. Só a equipe resolve eventos e libera temas eleitorais.
-4. Leitura pública passa por funções (`get_topic`, `get_predictions`…) que aplicam visibilidade e revelação; desafios "só por link" não aparecem em listas.
+4. Perfil público mínimo: `@handle`, nome e foto. O `@` e o nome **não** vêm do e-mail nem da conta Google/Apple: nascem opacos (`previsor_ab12cd`) e a pessoa escolhe o que mostrar na confirmação inicial. `is_staff` e `onboarded_at` não são legíveis por ninguém além do próprio usuário (via `my_profile()`), e nomes como `admin`, `equipe` e `jaja` são reservados.
+5. Leitura pública passa por funções (`get_topic`, `get_predictions`…) que aplicam visibilidade e revelação; desafios "só por link" não aparecem em listas.
 
 **Limites do modelo de confiança:** quem opera o banco tecnicamente consegue alterar dados. O hash prova integridade para quem o guardou na hora (link ou print). Uma prova independente exigiria registrar os hashes num carimbo de tempo público (por exemplo, OpenTimestamps), o que **não está implementado**. A equipe também pode ler conteúdo sinalizado ou denunciado, e isso precisa constar nos termos (há um rascunho em `/terms` e `/privacy`).
 
@@ -70,15 +71,28 @@ update public.profiles set is_staff = true where handle = 'seu_handle';
 insert into public.moderation_terms (term) values ('exemplo de termo');
 ```
 
-### 4) Deploy
-Vercel: importe o repositório e defina as variáveis de `.env.example`. `NEXT_PUBLIC_SITE_URL` deve ser o domínio final.
+### 4) Deploy (Firebase App Hosting)
+
+O app precisa de servidor (Server Actions, cookies de sessão, rota `/api/live` e cards sociais dinâmicos), então o **Firebase Hosting clássico (estático) não serve**. O caminho é o **Firebase App Hosting**, que roda Next.js em Cloud Run. A própria documentação do Next 16 o lista como integração de plataforma **não verificada** pela equipe do Next ("feature support and compatibility may vary"); teste o primeiro deploy antes de confiar nele.
+
+O que **precisa ser feito por você** (exige sua conta; não dá para fazer de dentro deste repositório):
+
+1. No [console do Firebase](https://console.firebase.google.com), crie ou escolha um projeto e verifique o plano exigido. Pelo que encontrei em buscas (não consegui abrir a página oficial daqui), o App Hosting exige o plano **Blaze** (pago por uso); confirme o requisito e os preços vigentes em firebase.google.com antes de ativar.
+2. **Build → App Hosting → Começar**: conecte o repositório GitHub `leplonghi/jaja`, escolha a branch (`main` depois do merge) e a região. A raiz do app é `/`.
+3. Preencha as variáveis no `apphosting.yaml` (veja o arquivo) ou no console. As `NEXT_PUBLIC_*` são embutidas **no build**, então precisam de `availability: BUILD`.
+4. Com a URL pública que o App Hosting gerar (ou seu domínio): defina `NEXT_PUBLIC_SITE_URL` e cadastre `https://SUA-URL/auth/callback` em **Supabase → Authentication → URL Configuration → Redirect URLs** (e a Site URL).
+5. Faça um novo rollout e teste: login por e-mail, onboarding, criar e revelar uma previsão.
+
+Alternativa sem Firebase: como qualquer app Node, o repositório roda com `npm run build && npm run start`, e a documentação do Next indica Docker/Cloud Run como caminho genérico.
+
+> O Supabase continua sendo o banco e o login (Google, Apple e e-mail). O Firebase aqui é só a hospedagem.
 
 ## Testes
 
 ```bash
 npm run typecheck && npm run lint
 npm test                                                                 # unitários (os de banco são ignorados sem a variável abaixo)
-TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm test   # inclui 28 testes de RLS/funções
+TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm test   # inclui 31 testes de RLS/funções
 ```
 
 Os testes de banco criam e apagam o database `jaja_test` num Postgres real e tentam **trapacear** (ler previsão alheia, editar, prever após o prazo, resolver sem ser equipe, vazar item pendente para anônimo, abrir tema eleitoral sem liberação…). Use um Postgres local descartável, nunca o de produção. Os unitários conferem, entre outras coisas, que **pt/en/es têm as mesmas chaves e marcadores** e que o hash calculado no navegador é idêntico ao do banco.

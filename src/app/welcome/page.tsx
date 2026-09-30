@@ -20,7 +20,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
     <div className="mx-auto max-w-lg pt-6 sm:pt-12">
       <h1 className="display text-6xl sm:text-7xl">{t("welcome.title")}</h1>
       <p className="mt-4 mb-8 text-muted">{t("welcome.sub")}</p>
-      <WelcomeForm next={target} age={minAge()} />
+      <WelcomeForm next={target} age={minAge()} initialHandle={viewer.handle} initialName={viewer.display_name} />
     </div>
   );
 }

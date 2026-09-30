@@ -22,10 +22,20 @@ export async function setLocale(locale: string) {
   revalidatePath("/", "layout");
 }
 
-export async function completeOnboarding(adult: boolean, terms: boolean): Promise<Result> {
+export async function completeOnboarding(
+  adult: boolean,
+  terms: boolean,
+  handle: string,
+  displayName: string,
+): Promise<Result> {
   if (IS_DEMO) return demo();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("complete_onboarding", { p_adult_ok: adult, p_terms_ok: terms });
+  const { error } = await supabase.rpc("complete_onboarding", {
+    p_adult_ok: adult,
+    p_terms_ok: terms,
+    p_handle: handle,
+    p_display_name: displayName,
+  });
   if (error) return fail(error.message);
   revalidatePath("/", "layout");
   return { ok: true };

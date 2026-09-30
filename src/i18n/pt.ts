@@ -336,9 +336,12 @@ export const pt = {
 
   // onboarding
   "welcome.title": "Antes de começar",
-  "welcome.sub": "Duas confirmações rápidas e você já pode prever.",
+  "welcome.sub": "Escolha como você aparece e faça duas confirmações rápidas.",
   "welcome.adult": "Confirmo que tenho a idade mínima exigida para usar o jaja no meu país ({age} anos ou mais).",
   "welcome.terms": "Li e aceito os Termos e a Política de Privacidade, inclusive a análise automática de texto por segurança.",
+  "welcome.public": "Seu nome e seu @ são públicos. O jaja não usa seu e-mail nem o nome da sua conta Google/Apple: escolha o que quiser mostrar.",
+  "welcome.name": "Nome de exibição",
+  "welcome.handle": "Seu @ (3 a 20: letras minúsculas, números e _)",
   "welcome.cta": "Continuar",
 
   // login
@@ -414,6 +417,9 @@ export const pt = {
   "e.reveal_too_far": "A revelação pode ser em no máximo 5 anos.",
   "e.invalid_visibility": "Visibilidade inválida.",
   "e.onboarding_incomplete": "Marque as duas confirmações para continuar.",
+  "e.handle_invalid": "Esse @ não é válido. Use 3 a 20 letras minúsculas, números ou _.",
+  "e.handle_taken": "Esse @ já está em uso. Escolha outro.",
+  "e.name_invalid": "O nome precisa ter entre 1 e 60 caracteres.",
   "e.rate_limited": "Muitas ações em pouco tempo. Tente de novo mais tarde.",
   "e.check": "Confira os campos: algum valor está fora do permitido.",
 } as const;

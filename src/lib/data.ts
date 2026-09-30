@@ -29,20 +29,10 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
-  const { data: p } = await supabase
-    .from("profiles")
-    .select(`${PROFILE_COLS}, is_staff, onboarded_at`)
-    .eq("id", data.user.id)
-    .single();
+  // is_staff e onboarded_at não são colunas públicas: só o próprio perfil lê, via função.
+  const { data: p } = await supabase.rpc("my_profile");
   if (!p) return null;
-  return {
-    id: p.id,
-    handle: p.handle,
-    display_name: p.display_name,
-    avatar_url: p.avatar_url,
-    is_staff: p.is_staff,
-    onboarded: !!p.onboarded_at,
-  };
+  return p as Viewer;
 });
 
 export type Tab = "open" | "waiting" | "revealed";
