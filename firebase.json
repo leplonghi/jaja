@@ -1,0 +1,15 @@
+{
+  "apphosting": {
+    "backendId": "jaja",
+    "rootDir": ".",
+    "ignore": [
+      "node_modules",
+      ".git",
+      ".next",
+      "tests",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      ".env.local"
+    ]
+  }
+}

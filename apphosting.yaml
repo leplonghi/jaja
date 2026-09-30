@@ -1,0 +1,31 @@
+# Firebase App Hosting: https://firebase.google.com/docs/app-hosting/configure
+# (formato conforme a documentação do Firebase; não validado neste ambiente,
+# pois o acesso a firebase.google.com está bloqueado aqui. Confira no 1º rollout.)
+
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+
+# O bloco abaixo é preenchido por `npm run setup` (ou à mão: descomente e edite).
+# As NEXT_PUBLIC_* são embutidas no build (BUILD). São valores públicos por
+# natureza (URL do projeto e chave publishable/anon);
+# NUNCA coloque aqui a chave service_role do Supabase.
+# --- env:begin
+#
+# env:
+#   - variable: NEXT_PUBLIC_SUPABASE_URL
+#     value: https://SEU-PROJETO.supabase.co
+#     availability: [BUILD, RUNTIME]
+#   - variable: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+#     value: sb_publishable_...
+#     availability: [BUILD, RUNTIME]
+#   - variable: NEXT_PUBLIC_SITE_URL
+#     value: https://SEU-DOMINIO
+#     availability: [BUILD, RUNTIME]
+#   - variable: MIN_AGE_BR
+#     value: "18"
+#     availability: [RUNTIME]
+# --- env:end
