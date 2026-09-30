@@ -76,8 +76,11 @@ export function safeNext(next: string | null | undefined, fallback = "/vault") {
   return next;
 }
 
+/** URL pública: variável explícita, senão a que a Vercel expõe, senão localhost. */
 export function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  const fallback = vercel ? `https://${vercel}` : "http://localhost:3000";
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? fallback).replace(/\/$/, "");
 }
 
 export function isChallenge(t: Pick<Topic, "kind" | "allow_join">) {
