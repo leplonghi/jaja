@@ -1,34 +1,36 @@
 import Link from "next/link";
-import { CircleCheck, CircleX, ExternalLink } from "lucide-react";
+import { CircleCheck, CircleX, ExternalLink, Lock } from "lucide-react";
+import { getT } from "@/i18n/server";
 import { cn, timeAgo } from "@/lib/format";
-import type { EventWithMeta, Prediction, Profile } from "@/lib/types";
+import type { Prediction, Profile, Topic } from "@/lib/types";
 import { Avatar } from "./Avatar";
-import { VerifyButton } from "./VerifyButton";
+import { ReportButton } from "./ReportButton";
 import { HashPill } from "./ui";
+import { VerifyButton } from "./VerifyButton";
 
-/** Um palpite com conteúdo visível (autor, ou evento já revelado). */
-export function PredictionCard({
+type Author = Pick<Profile, "handle" | "display_name" | "avatar_url">;
+
+/** Uma previsão: com conteúdo (autor ou revelada), retida pela moderação, ou ainda fechada. */
+export async function PredictionCard({
   prediction,
-  event,
+  topic,
   author,
-  showEvent = false,
+  showTopic = false,
 }: {
   prediction: Prediction;
-  event: EventWithMeta;
-  author?: Profile | null;
-  showEvent?: boolean;
+  topic: Topic;
+  author?: Author | null;
+  showTopic?: boolean;
 }) {
-  const option = event.options.find((o) => o.id === prediction.option_id);
-  const resolved = event.status === "resolved";
-  const hit = resolved && prediction.option_id === event.winning_option_id;
+  const { t } = await getT();
+  const hasContent = prediction.body !== undefined;
+  const option = topic.options.find((o) => o.id === prediction.option_id);
+  const scored = topic.kind === "event" && topic.status === "resolved" && !!prediction.option_id;
+  const hit = scored && prediction.option_id === topic.winning_option_id;
+  const noteKey = prediction.moderation === "flagged" ? "topic.held" : prediction.moderation === "blocked" ? "topic.removed" : null;
 
   return (
-    <article
-      className={cn(
-        "card p-5",
-        resolved && (hit ? "border-good/30 bg-good/[0.04]" : "border-bad/25 bg-bad/[0.03]"),
-      )}
-    >
+    <article className={cn("sheet p-5", scored && (hit ? "border-ok bg-ok/5" : "border-bad bg-bad/5"))}>
       <header className="flex items-start justify-between gap-3">
         {author ? (
           <Link href={`/u/${author.handle}`} className="flex min-w-0 items-center gap-3">
@@ -39,42 +41,60 @@ export function PredictionCard({
             </span>
           </Link>
         ) : (
-          <span className="text-xs text-muted">Lacrado {timeAgo(prediction.created_at)}</span>
+          <span className="text-xs text-muted">{t("pred.sealedAt", { when: timeAgo(prediction.created_at, t) })}</span>
         )}
-        {resolved && (
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1",
-              hit ? "bg-good/15 text-good ring-good/30" : "bg-bad/15 text-bad ring-bad/30",
-            )}
-          >
+        {scored && (
+          <span className={cn("kicker inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1", hit ? "border-ok text-ok" : "border-bad text-bad")}>
             {hit ? <CircleCheck size={13} aria-hidden /> : <CircleX size={13} aria-hidden />}
-            {hit ? "Acertou" : "Errou"}
+            {hit ? t("pred.hit") : t("pred.miss")}
           </span>
         )}
       </header>
 
-      {showEvent && (
-        <Link href={`/eventos/${event.id}`} className="mt-4 block text-sm font-semibold leading-snug hover:text-gold">
-          {event.title}
+      {showTopic && (
+        <Link href={`/t/${topic.id}`} className="display-mid mt-4 block text-2xl hover:underline">
+          {topic.title}
         </Link>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="rounded-lg bg-white/[0.07] px-3 py-1.5 font-semibold">{option?.label ?? "—"}</span>
-        <span className="text-muted">
-          com <b className="tabular-nums text-fg">{prediction.confidence}%</b> de confiança
-        </span>
-      </div>
+      {prediction.held ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-muted">
+          <Lock size={14} aria-hidden /> {t("topic.held")}
+        </p>
+      ) : hasContent ? (
+        <>
+          {(option || prediction.confidence != null) && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+              {option && <span className="rounded-full border-[1.5px] border-ink bg-card px-3.5 py-1.5 font-semibold">{option.label}</span>}
+              {prediction.confidence != null && (
+                <span className="text-muted">
+                  {t("pred.conf", { n: prediction.confidence })}
+                </span>
+              )}
+            </div>
+          )}
+          {prediction.body && <p className="mt-3 whitespace-pre-wrap break-words leading-relaxed text-ink-2">{prediction.body}</p>}
+          {noteKey && (
+            <p className="mt-3 flex items-center gap-2 text-xs font-medium text-muted">
+              <Lock size={12} aria-hidden /> {t(noteKey)}
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="mt-4 space-y-2" aria-hidden>
+          {[90, 100, 70].map((w, i) => (
+            <div key={i} className="h-2.5 rounded-full bg-ink/15" style={{ width: `${w}%` }} />
+          ))}
+        </div>
+      )}
 
-      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{prediction.thesis}</p>
-
-      <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+      <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink/20 pt-3">
         <HashPill hash={prediction.commitment} />
-        <div className="flex items-center gap-4">
-          {resolved && <VerifyButton prediction={prediction} />}
-          <Link href={`/p/${prediction.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-fg">
-            Abrir <ExternalLink size={12} aria-hidden />
+        <div className="flex flex-wrap items-center gap-4">
+          {topic.revealed && hasContent && prediction.salt && !prediction.held && <VerifyButton prediction={prediction} />}
+          {topic.revealed && !prediction.mine && <ReportButton topicId={topic.id} predictionId={prediction.id} />}
+          <Link href={`/p/${prediction.id}`} className="inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4">
+            {t("pred.open")} <ExternalLink size={12} aria-hidden />
           </Link>
         </div>
       </footer>

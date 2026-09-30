@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Mail, MailCheck } from "lucide-react";
+import { useI18n } from "@/i18n/client";
 import { createClient } from "@/lib/supabase/client";
 
 type Provider = "google" | "apple";
@@ -26,6 +27,7 @@ function AppleIcon() {
 }
 
 export function AuthForm({ next, demo }: { next: string; demo: boolean }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState<Provider | "email" | null>(null);
   const [sent, setSent] = useState(false);
@@ -38,11 +40,7 @@ export function AuthForm({ next, demo }: { next: string; demo: boolean }) {
     setBusy(provider);
     const { error } = await createClient().auth.signInWithOAuth({ provider, options: { redirectTo: redirectTo() } });
     if (error) {
-      setError(
-        provider === "apple"
-          ? "Não foi possível entrar com Apple. Confira se o provedor está ativado no Supabase."
-          : "Não foi possível entrar com Google. Confira se o provedor está ativado no Supabase.",
-      );
+      setError(t("auth.err.provider", { provider: provider === "apple" ? "Apple" : "Google" }));
       setBusy(null);
     }
   }
@@ -51,35 +49,26 @@ export function AuthForm({ next, demo }: { next: string; demo: boolean }) {
     e.preventDefault();
     setError(null);
     setBusy("email");
-    const { error } = await createClient().auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo() },
-    });
+    const { error } = await createClient().auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: redirectTo() } });
     setBusy(null);
-    if (error) setError("Não conseguimos enviar o link. Confira o e-mail e tente de novo.");
+    if (error) setError(t("auth.err.mail"));
     else setSent(true);
   }
 
   if (demo) {
-    return (
-      <div className="rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm text-gold">
-        Login indisponível no modo demonstração. Configure as variáveis do Supabase (veja o README) para ativar Google, Apple e e-mail.
-      </div>
-    );
+    return <div className="rounded-2xl border-[1.5px] border-ink bg-signal/20 p-4 text-sm font-medium">{t("auth.demo")}</div>;
   }
 
   if (sent) {
     return (
       <div className="flex flex-col items-center gap-3 py-6 text-center">
-        <span className="grid size-14 place-items-center rounded-full bg-good/15 text-good">
+        <span className="grid size-14 place-items-center rounded-full border-[1.5px] border-ink bg-signal">
           <MailCheck size={28} aria-hidden />
         </span>
-        <h2 className="text-xl font-semibold">Confira seu e-mail</h2>
-        <p className="max-w-xs text-sm text-muted">
-          Enviamos um link de acesso para <b className="text-fg">{email}</b>. Ele vale por 1 hora.
-        </p>
-        <button onClick={() => setSent(false)} className="mt-2 text-sm font-medium text-gold hover:underline">
-          Usar outro e-mail
+        <h2 className="display-mid text-2xl">{t("auth.sent.t")}</h2>
+        <p className="max-w-xs text-sm text-muted">{t("auth.sent.b", { email })}</p>
+        <button onClick={() => setSent(false)} className="text-sm font-medium underline underline-offset-4">
+          {t("auth.other")}
         </button>
       </div>
     );
@@ -88,33 +77,25 @@ export function AuthForm({ next, demo }: { next: string; demo: boolean }) {
   const disabled = busy !== null;
   return (
     <div className="space-y-3">
-      <button
-        onClick={() => oauth("google")}
-        disabled={disabled}
-        className="btn-ghost flex w-full items-center justify-center gap-3 rounded-xl px-4 py-3.5 text-sm font-semibold"
-      >
+      <button onClick={() => oauth("google")} disabled={disabled} className="btn btn-line w-full gap-3 px-4 py-4 text-sm">
         {busy === "google" ? <Loader2 size={18} className="animate-spin" /> : <GoogleIcon />}
-        Continuar com Google
+        {t("auth.google")}
       </button>
-      <button
-        onClick={() => oauth("apple")}
-        disabled={disabled}
-        className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3.5 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-50"
-      >
+      <button onClick={() => oauth("apple")} disabled={disabled} className="btn btn-ink w-full gap-3 px-4 py-4 text-sm">
         {busy === "apple" ? <Loader2 size={18} className="animate-spin" /> : <AppleIcon />}
-        Continuar com Apple
+        {t("auth.apple")}
       </button>
 
-      <div className="flex items-center gap-3 py-2 text-xs text-faint">
-        <span className="h-px flex-1 bg-line" /> ou com e-mail <span className="h-px flex-1 bg-line" />
+      <div className="kicker flex items-center gap-3 py-2 text-muted">
+        <span className="h-px flex-1 bg-ink/20" /> {t("auth.or")} <span className="h-px flex-1 bg-ink/20" />
       </div>
 
       <form onSubmit={magicLink} className="space-y-3">
         <label htmlFor="email" className="sr-only">
-          E-mail
+          {t("auth.email")}
         </label>
         <div className="relative">
-          <Mail size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" aria-hidden />
+          <Mail size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
           <input
             id="email"
             type="email"
@@ -124,17 +105,17 @@ export function AuthForm({ next, demo }: { next: string; demo: boolean }) {
             placeholder="voce@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-line bg-black/30 py-3.5 pl-11 pr-4 text-sm placeholder:text-faint focus:border-gold/60 focus:outline-none"
+            className="field pl-11"
           />
         </div>
-        <button type="submit" disabled={disabled || !email} className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm">
+        <button type="submit" disabled={disabled || !email} className="btn btn-signal w-full px-4 py-4 text-sm">
           {busy === "email" && <Loader2 size={18} className="animate-spin" />}
-          Receber link de acesso
+          {t("auth.email.cta")}
         </button>
       </form>
 
       {error && (
-        <p role="alert" className="rounded-lg bg-bad/10 px-3 py-2 text-sm text-bad">
+        <p role="alert" className="text-sm font-medium text-bad">
           {error}
         </p>
       )}

@@ -1,12 +1,13 @@
 import type { UserStats, VaultItem } from "./types";
 
-/** Estatísticas a partir dos palpites do próprio usuário (já filtrados por RLS). */
+const scored = (i: VaultItem) => i.topic.kind === "event" && i.topic.status === "resolved";
+const hit = (i: VaultItem) => i.prediction.option_id === i.topic.winning_option_id;
+
+/** Estatísticas a partir das previsões do próprio usuário. Só eventos resolvidos pontuam. */
 export function computeStats(items: VaultItem[]): UserStats {
   const resolved = items
-    .filter((i) => i.event.status === "resolved")
-    .sort((a, b) => +new Date(b.event.resolved_at!) - +new Date(a.event.resolved_at!));
-
-  const hit = (i: VaultItem) => i.prediction.option_id === i.event.winning_option_id;
+    .filter(scored)
+    .sort((a, b) => +new Date(b.topic.resolved_at!) - +new Date(a.topic.resolved_at!));
   const hits = resolved.filter(hit).length;
 
   let streak = 0;
@@ -15,11 +16,9 @@ export function computeStats(items: VaultItem[]): UserStats {
     streak++;
   }
 
-  const brier = resolved.length
-    ? resolved.reduce((sum, i) => {
-        const p = i.prediction.confidence / 100;
-        return sum + (p - (hit(i) ? 1 : 0)) ** 2;
-      }, 0) / resolved.length
+  const withConf = resolved.filter((i) => i.prediction.confidence != null);
+  const brier = withConf.length
+    ? withConf.reduce((sum, i) => sum + ((i.prediction.confidence! / 100) - (hit(i) ? 1 : 0)) ** 2, 0) / withConf.length
     : null;
 
   return {
@@ -27,7 +26,7 @@ export function computeStats(items: VaultItem[]): UserStats {
     hits,
     accuracy: resolved.length ? Math.round((hits / resolved.length) * 1000) / 10 : null,
     streak,
-    pending: items.filter((i) => i.event.status === "open").length,
+    pending: items.filter((i) => i.topic.status === "open" && !i.topic.revealed).length,
     brier: brier === null ? null : Math.round(brier * 1000) / 1000,
   };
 }

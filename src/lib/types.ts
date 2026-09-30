@@ -1,18 +1,13 @@
-export const CATEGORIES = [
-  { id: "politica", label: "Política", emoji: "🗳️" },
-  { id: "esportes", label: "Esportes", emoji: "⚽" },
-  { id: "cultura", label: "Cultura", emoji: "🎬" },
-  { id: "economia", label: "Economia", emoji: "📈" },
-  { id: "tecnologia", label: "Tecnologia", emoji: "🤖" },
-  { id: "ciencia", label: "Ciência", emoji: "🔬" },
-  { id: "outros", label: "Outros", emoji: "✨" },
-] as const;
+export const CATEGORY_IDS = ["politica", "esportes", "cultura", "economia", "tecnologia", "ciencia", "outros"] as const;
+export type CategoryId = (typeof CATEGORY_IDS)[number];
 
-export type CategoryId = (typeof CATEGORIES)[number]["id"];
-export type EventStatus = "open" | "resolved" | "canceled";
+export type TopicKind = "event" | "free";
+export type TopicStatus = "pending_review" | "open" | "resolved" | "canceled" | "blocked";
+export type Visibility = "public" | "link";
+export type ModerationStatus = "ok" | "flagged" | "blocked";
 
-/** Fase exibida ao usuário: `locked` = prazo passou, aguardando o resultado. */
-export type EventPhase = "open" | "locked" | "resolved" | "canceled";
+/** Fase exibida: derivada do status, da revelação e do prazo. */
+export type TopicPhase = "open" | "waiting" | "revealed" | "canceled" | "pending" | "blocked";
 
 export interface Profile {
   id: string;
@@ -21,54 +16,71 @@ export interface Profile {
   avatar_url: string | null;
 }
 
-export interface EventOption {
+export interface Viewer extends Profile {
+  is_staff: boolean;
+  onboarded: boolean;
+}
+
+export interface TopicOption {
   id: string;
-  event_id: string;
   label: string;
   position: number;
 }
 
-export interface EventRow {
+export interface Topic {
   id: string;
-  creator_id: string;
+  kind: TopicKind;
   title: string;
   description: string | null;
   category: CategoryId;
+  visibility: Visibility;
+  status: TopicStatus;
   locks_at: string;
-  status: EventStatus;
+  reveal_at: string | null;
+  resolve_by: string | null;
+  source_note: string | null;
+  source_url: string | null;
+  allow_join: boolean;
+  is_electoral: boolean;
+  released: boolean;
   winning_option_id: string | null;
   resolved_at: string | null;
-  created_at: string;
-}
-
-export interface EventWithMeta extends EventRow {
-  options: EventOption[];
-  seals: number;
-  creator: Profile | null;
-}
-
-/** Conteúdo do palpite: só existe para o autor ou depois da revelação. */
-export interface Prediction {
-  id: string;
-  event_id: string;
-  user_id: string;
-  option_id: string;
-  thesis: string;
-  confidence: number;
-  salt: string;
-  commitment: string;
-  created_at: string;
-}
-
-export interface Seal {
-  id: string;
-  event_id: string;
-  user_id: string;
-  commitment: string;
+  revealed_at: string | null;
   created_at: string;
   revealed: boolean;
-  profile: Profile | null;
-  prediction: Prediction | null;
+  seals: number;
+  options: TopicOption[];
+  host: Profile | null;
+  my_prediction_id: string | null;
+}
+
+/** Uma previsão como o servidor a entrega: conteúdo só quando revelada (ou se for sua). */
+export interface Prediction {
+  id: string;
+  topic_id: string;
+  user_id: string;
+  created_at: string;
+  commitment: string;
+  mine: boolean;
+  held: boolean;
+  handle?: string;
+  display_name?: string;
+  avatar_url?: string | null;
+  option_id?: string | null;
+  body?: string;
+  confidence?: number | null;
+  salt?: string;
+  moderation?: ModerationStatus;
+}
+
+export interface PredictionPage {
+  topic: Topic;
+  prediction: Prediction & { author: Profile | null };
+}
+
+export interface VaultItem {
+  prediction: Prediction;
+  topic: Topic;
 }
 
 export interface LeaderboardRow {
@@ -79,12 +91,7 @@ export interface LeaderboardRow {
   total: number;
   hits: number;
   accuracy: number;
-  brier: number;
-}
-
-export interface VaultItem {
-  prediction: Prediction;
-  event: EventWithMeta;
+  brier: number | null;
 }
 
 export interface UserStats {
@@ -94,4 +101,12 @@ export interface UserStats {
   streak: number;
   pending: number;
   brier: number | null;
+}
+
+export interface AdminQueue {
+  pending_topics: Topic[];
+  flagged_predictions: { id: string; topic_id: string; topic_title: string; body: string; created_at: string; handle: string }[];
+  electoral_to_release: Topic[];
+  events_to_resolve: Topic[];
+  recent_reports: { id: string; topic_id: string; prediction_id: string | null; reason: string; created_at: string }[];
 }

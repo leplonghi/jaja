@@ -1,167 +1,103 @@
 import { cache } from "react";
-import { DEMO_LEADERBOARD, DEMO_PROFILES, demoEvents, demoPredictions, demoSeals } from "./demo";
+import { DEMO_LEADERBOARD, DEMO_PROFILES, demoPredictions, demoTopics } from "./demo";
 import { createClient } from "./supabase/server";
 import { IS_DEMO } from "./supabase/env";
 import type {
-  EventOption,
-  EventRow,
-  EventWithMeta,
+  AdminQueue,
   LeaderboardRow,
   Prediction,
+  PredictionPage,
   Profile,
-  Seal,
+  Topic,
   VaultItem,
+  Viewer,
 } from "./types";
 
 const PROFILE_COLS = "id, handle, display_name, avatar_url";
+const UUID = /^[0-9a-f-]{36}$/i;
 
-export const getCurrentUser = cache(async (): Promise<Profile | null> => {
+/** Chama uma função SQL (RPC). As regras de sigilo vivem no banco, não aqui. */
+async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) return null;
+  return data as T;
+}
+
+export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (IS_DEMO) return null;
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
-  const { data: profile } = await supabase.from("profiles").select(PROFILE_COLS).eq("id", data.user.id).single();
-  return (profile as Profile | null) ?? null;
+  const { data: p } = await supabase
+    .from("profiles")
+    .select(`${PROFILE_COLS}, is_staff, onboarded_at`)
+    .eq("id", data.user.id)
+    .single();
+  if (!p) return null;
+  return {
+    id: p.id,
+    handle: p.handle,
+    display_name: p.display_name,
+    avatar_url: p.avatar_url,
+    is_staff: p.is_staff,
+    onboarded: !!p.onboarded_at,
+  };
 });
 
-/** Anexa opções, contagem de lacres e criador a uma lista de eventos. */
-async function hydrate(rows: EventRow[]): Promise<EventWithMeta[]> {
-  if (!rows.length) return [];
-  const supabase = await createClient();
-  const ids = rows.map((r) => r.id);
-  const creatorIds = [...new Set(rows.map((r) => r.creator_id))];
+export type Tab = "open" | "waiting" | "revealed";
 
-  const [opts, counts, creators] = await Promise.all([
-    supabase.from("event_options").select("*").in("event_id", ids).order("position"),
-    supabase.from("event_seal_counts").select("event_id, seals").in("event_id", ids),
-    supabase.from("profiles").select(PROFILE_COLS).in("id", creatorIds),
-  ]);
-
-  const optionsBy = new Map<string, EventOption[]>();
-  for (const o of (opts.data ?? []) as EventOption[]) {
-    optionsBy.set(o.event_id, [...(optionsBy.get(o.event_id) ?? []), o]);
-  }
-  const countBy = new Map((counts.data ?? []).map((c: { event_id: string; seals: number }) => [c.event_id, c.seals]));
-  const creatorBy = new Map(((creators.data ?? []) as Profile[]).map((p) => [p.id, p]));
-
-  return rows.map((r) => ({
-    ...r,
-    options: optionsBy.get(r.id) ?? [],
-    seals: countBy.get(r.id) ?? 0,
-    creator: creatorBy.get(r.creator_id) ?? null,
-  }));
-}
-
-export type EventTab = "abertos" | "aguardando" | "revelados";
-
-export async function listEvents(opts: { tab?: EventTab; category?: string; limit?: number } = {}): Promise<EventWithMeta[]> {
-  const { tab = "abertos", category, limit = 30 } = opts;
-
+export async function listTopics(opts: { tab?: Tab; kind?: "event" | "free"; category?: string; limit?: number } = {}): Promise<Topic[]> {
+  const { tab = "open", kind, category, limit = 30 } = opts;
   if (IS_DEMO) {
     const now = Date.now();
-    return demoEvents()
-      .filter((e) => (category ? e.category === category : true))
-      .filter((e) => {
-        if (tab === "revelados") return e.status === "resolved";
-        if (e.status !== "open") return false;
-        const open = new Date(e.locks_at).getTime() > now;
-        return tab === "abertos" ? open : !open;
+    return demoTopics()
+      .filter((t) => t.visibility === "public" && ["open", "resolved"].includes(t.status))
+      .filter((t) => (kind ? t.kind === kind : true) && (category ? t.category === category : true))
+      .filter((t) => {
+        if (tab === "revealed") return t.revealed;
+        if (t.revealed) return false;
+        const open = new Date(t.locks_at).getTime() > now;
+        return tab === "open" ? open : !open;
       })
-      .sort((a, b) => b.seals - a.seals)
+      .sort((a, b) =>
+        tab === "open" ? +new Date(a.locks_at) - +new Date(b.locks_at) : +new Date(b.locks_at) - +new Date(a.locks_at),
+      )
       .slice(0, limit);
   }
-
-  const supabase = await createClient();
-  const nowIso = new Date().toISOString();
-  let q = supabase.from("events").select("*").limit(limit);
-  if (category) q = q.eq("category", category);
-  if (tab === "abertos") q = q.eq("status", "open").gt("locks_at", nowIso).order("locks_at");
-  if (tab === "aguardando") q = q.eq("status", "open").lte("locks_at", nowIso).order("locks_at", { ascending: false });
-  if (tab === "revelados") q = q.eq("status", "resolved").order("resolved_at", { ascending: false });
-  const { data } = await q;
-  return hydrate((data ?? []) as EventRow[]);
+  return (await rpc<Topic[]>("list_topics", { p_tab: tab, p_kind: kind ?? null, p_category: category ?? null, p_limit: limit })) ?? [];
 }
 
-export async function getEvent(id: string): Promise<EventWithMeta | null> {
-  if (IS_DEMO) return demoEvents().find((e) => e.id === id) ?? null;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const supabase = await createClient();
-  const { data } = await supabase.from("events").select("*").eq("id", id).maybeSingle();
-  if (!data) return null;
-  return (await hydrate([data as EventRow]))[0];
+export async function getTopic(id: string): Promise<Topic | null> {
+  if (IS_DEMO) return demoTopics().find((t) => t.id === id) ?? null;
+  if (!UUID.test(id)) return null;
+  return rpc<Topic>("get_topic", { p_id: id });
 }
 
-/** Lacres públicos de um evento + conteúdo (o RLS só devolve o que você pode ver). */
-export async function getSeals(eventId: string): Promise<Seal[]> {
-  if (IS_DEMO) return demoSeals(eventId);
-  const supabase = await createClient();
-  const [seals, preds] = await Promise.all([
-    supabase
-      .from("public_seals")
-      .select("id, event_id, user_id, commitment, created_at, revealed")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase.from("predictions").select("*").eq("event_id", eventId),
-  ]);
-  const rows = (seals.data ?? []) as Omit<Seal, "profile" | "prediction">[];
-  const predBy = new Map(((preds.data ?? []) as Prediction[]).map((p) => [p.id, p]));
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select(PROFILE_COLS)
-    .in("id", [...new Set(rows.map((r) => r.user_id))]);
-  const profBy = new Map(((profiles ?? []) as Profile[]).map((p) => [p.id, p]));
-  return rows.map((r) => ({ ...r, profile: profBy.get(r.user_id) ?? null, prediction: predBy.get(r.id) ?? null }));
+export async function getPredictions(topicId: string): Promise<Prediction[]> {
+  if (IS_DEMO) return demoPredictions(topicId);
+  if (!UUID.test(topicId)) return [];
+  return (await rpc<Prediction[]>("get_predictions", { p_id: topicId })) ?? [];
 }
 
-/** Um único lacre (página pública /p/[id]). */
-export async function getSeal(id: string): Promise<{ seal: Seal; event: EventWithMeta } | null> {
+export async function getPredictionPage(id: string): Promise<PredictionPage | null> {
   if (IS_DEMO) {
-    for (const e of demoEvents()) {
-      const s = demoSeals(e.id).find((x) => x.id === id);
-      if (s) return { seal: s, event: e };
+    for (const t of demoTopics()) {
+      const p = demoPredictions(t.id).find((x) => x.id === id);
+      if (p) {
+        const author = DEMO_PROFILES.find((x) => x.id === p.user_id) ?? null;
+        return { topic: t, prediction: { ...p, author } };
+      }
     }
     return null;
   }
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("public_seals")
-    .select("id, event_id, user_id, commitment, created_at, revealed")
-    .eq("id", id)
-    .maybeSingle();
-  if (!row) return null;
-  const [event, pred, prof] = await Promise.all([
-    getEvent(row.event_id),
-    supabase.from("predictions").select("*").eq("id", id).maybeSingle(),
-    supabase.from("profiles").select(PROFILE_COLS).eq("id", row.user_id).maybeSingle(),
-  ]);
-  if (!event) return null;
-  return {
-    seal: { ...row, profile: (prof.data as Profile | null) ?? null, prediction: (pred.data as Prediction | null) ?? null },
-    event,
-  };
+  if (!UUID.test(id)) return null;
+  return rpc<PredictionPage>("get_prediction", { p_id: id });
 }
 
-/** Todos os palpites do usuário logado (o RLS já garante que são só dele). */
-export async function getVault(userId: string): Promise<VaultItem[]> {
+export async function getVault(): Promise<VaultItem[]> {
   if (IS_DEMO) return [];
-  const supabase = await createClient();
-  const { data: preds } = await supabase
-    .from("predictions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-  const predictions = (preds ?? []) as Prediction[];
-  if (!predictions.length) return [];
-  const { data: evs } = await supabase.from("events").select("*").in("id", [...new Set(predictions.map((p) => p.event_id))]);
-  const events = await hydrate((evs ?? []) as EventRow[]);
-  const byId = new Map(events.map((e) => [e.id, e]));
-  return predictions.flatMap((prediction) => {
-    const event = byId.get(prediction.event_id);
-    return event ? [{ prediction, event }] : [];
-  });
+  return (await rpc<VaultItem[]>("my_vault")) ?? [];
 }
 
 export async function getLeaderboard(limit = 50): Promise<LeaderboardRow[]> {
@@ -173,7 +109,11 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardRow[]> {
     .order("accuracy", { ascending: false })
     .order("total", { ascending: false })
     .limit(limit);
-  return ((data ?? []) as LeaderboardRow[]).map((r) => ({ ...r, accuracy: Number(r.accuracy), brier: Number(r.brier) }));
+  return ((data ?? []) as LeaderboardRow[]).map((r) => ({
+    ...r,
+    accuracy: Number(r.accuracy),
+    brier: r.brier == null ? null : Number(r.brier),
+  }));
 }
 
 export async function getProfileByHandle(handle: string): Promise<Profile | null> {
@@ -183,34 +123,21 @@ export async function getProfileByHandle(handle: string): Promise<Profile | null
   return (data as Profile | null) ?? null;
 }
 
-/** Palpites REVELADOS de um usuário (perfil público). Lacres pendentes só contam. */
-export async function getPublicHistory(profile: Profile): Promise<{ items: VaultItem[]; pending: number }> {
+export async function getProfileHistory(profile: Profile): Promise<{ items: VaultItem[]; pending: number }> {
   if (IS_DEMO) {
-    const items = demoEvents()
-      .filter((e) => e.status === "resolved")
-      .flatMap((event) =>
-        demoPredictions(event.id)
+    const items = demoTopics()
+      .filter((t) => t.revealed && t.visibility === "public")
+      .flatMap((topic) =>
+        demoPredictions(topic.id)
           .filter((p) => p.user_id === profile.id)
-          .map((prediction) => ({ prediction, event })),
+          .map((prediction) => ({ prediction, topic })),
       );
     return { items, pending: 2 };
   }
-  const supabase = await createClient();
-  const { data: seals } = await supabase.from("public_seals").select("id, event_id, revealed").eq("user_id", profile.id);
-  const rows = (seals ?? []) as { id: string; event_id: string; revealed: boolean }[];
-  const pending = rows.filter((r) => !r.revealed).length;
-  const revealedIds = rows.filter((r) => r.revealed).map((r) => r.id);
-  if (!revealedIds.length) return { items: [], pending };
-  const { data: preds } = await supabase.from("predictions").select("*").in("id", revealedIds).order("created_at", { ascending: false });
-  const predictions = (preds ?? []) as Prediction[];
-  const { data: evs } = await supabase.from("events").select("*").in("id", [...new Set(predictions.map((p) => p.event_id))]);
-  const events = await hydrate((evs ?? []) as EventRow[]);
-  const byId = new Map(events.map((e) => [e.id, e]));
-  return {
-    pending,
-    items: predictions.flatMap((prediction) => {
-      const event = byId.get(prediction.event_id);
-      return event ? [{ prediction, event }] : [];
-    }),
-  };
+  return (await rpc<{ items: VaultItem[]; pending: number }>("profile_history", { p_user_id: profile.id })) ?? { items: [], pending: 0 };
+}
+
+export async function getAdminQueue(): Promise<AdminQueue | null> {
+  if (IS_DEMO) return null;
+  return rpc<AdminQueue>("admin_queue");
 }

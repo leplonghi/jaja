@@ -1,46 +1,49 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
+import { getT } from "@/i18n/server";
 import { timeAgo } from "@/lib/format";
-import type { Seal } from "@/lib/types";
+import type { Prediction } from "@/lib/types";
 import { Avatar } from "./Avatar";
+import { LiveCount } from "./LiveCount";
 import { HashPill } from "./ui";
 
-/** Lista pública de lacres ainda fechados: só quem, quando e o hash. */
-export function SealsList({ seals, total, viewerId }: { seals: Seal[]; total: number; viewerId?: string }) {
+/** Quem já guardou uma previsão (sem conteúdo): nome, hora e código. */
+export async function SealsList({ topicId, predictions, total }: { topicId: string; predictions: Prediction[]; total: number }) {
+  const { t } = await getT();
   return (
-    <section aria-labelledby="seals-title" className="card p-5">
-      <h2 id="seals-title" className="flex items-center gap-2 text-lg font-semibold">
-        <Lock size={17} className="text-gold" aria-hidden />
-        {total.toLocaleString("pt-BR")} {total === 1 ? "lacre" : "lacres"}
+    <section aria-labelledby="seals-title" className="sheet p-5">
+      <h2 id="seals-title" className="display-mid flex items-center gap-2 text-2xl">
+        <Lock size={18} aria-hidden />
+        <LiveCount topicId={topicId} initial={total} />
       </h2>
-      <p className="mt-1 text-xs text-muted">Todos trancados. O conteúdo só aparece quando o evento for resolvido.</p>
+      <p className="mt-1 text-xs text-muted">{t("topic.sealsNote")}</p>
 
-      {seals.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-faint">Ninguém lacrou ainda. Seja o primeiro a avisar.</p>
+      {predictions.length === 0 ? (
+        <p className="mt-6 text-center text-sm text-muted">{t("topic.noSeals")}</p>
       ) : (
         <ul className="mt-4 space-y-3">
-          {seals.slice(0, 30).map((s) => (
-            <li key={s.id} className="flex items-center gap-3">
-              <Avatar name={s.profile?.display_name ?? "?"} src={s.profile?.avatar_url} size={34} />
+          {predictions.slice(0, 30).map((p) => (
+            <li key={p.id} className="flex items-center gap-3">
+              <Avatar name={p.display_name ?? "?"} src={p.avatar_url} size={34} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">
-                  {s.profile ? (
-                    <Link href={`/u/${s.profile.handle}`} className="hover:text-gold">
-                      {s.profile.display_name}
+                  {p.handle ? (
+                    <Link href={`/u/${p.handle}`} className="hover:underline">
+                      {p.display_name}
                     </Link>
                   ) : (
-                    "Anônimo"
+                    "·"
                   )}
-                  {viewerId === s.user_id && <span className="ml-1.5 rounded bg-gold/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-gold">você</span>}
+                  {p.mine && <span className="kicker ml-2 rounded-full bg-signal px-1.5 py-0.5 text-ink">{t("common.you")}</span>}
                 </div>
-                <div className="text-xs text-faint">{timeAgo(s.created_at)}</div>
+                <div className="text-xs text-muted">{timeAgo(p.created_at, t)}</div>
               </div>
-              <HashPill hash={s.commitment} />
+              <HashPill hash={p.commitment} />
             </li>
           ))}
         </ul>
       )}
-      {total > 30 && <p className="mt-4 text-center text-xs text-faint">e mais {(total - 30).toLocaleString("pt-BR")} lacres trancados…</p>}
+      {total > 30 && <p className="mt-4 text-center text-xs text-muted">{t("common.more", { n: (total - 30).toLocaleString() })}</p>}
     </section>
   );
 }

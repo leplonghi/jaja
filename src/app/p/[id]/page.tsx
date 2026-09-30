@@ -1,110 +1,84 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarClock, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
-import { Countdown } from "@/components/Countdown";
-import { SealMark } from "@/components/Logo";
 import { PredictionCard } from "@/components/PredictionCard";
 import { ShareButton } from "@/components/ShareButton";
-import { HashPill } from "@/components/ui";
-import { getCurrentUser, getSeal } from "@/lib/data";
-import { formatDateTime, phaseOf, timeAgo } from "@/lib/format";
+import { HashPill, Tag } from "@/components/ui";
+import { getT } from "@/i18n/server";
+import { getPredictionPage } from "@/lib/data";
+import { timeAgo } from "@/lib/format";
 
 type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const found = await getSeal(id);
-  if (!found) return { title: "Lacre não encontrado" };
-  const who = found.seal.profile?.display_name ?? "Alguém";
-  return {
-    title: `${who} lacrou um palpite`,
-    description: `“${found.event.title}” — palpite lacrado com SHA-256. Revelação quando o evento for resolvido.`,
-  };
+  const [page, { t }] = await Promise.all([getPredictionPage(id), getT()]);
+  if (!page) return { title: "jaja" };
+  const who = page.prediction.author?.display_name ?? "jaja";
+  // Nunca inclui o conteúdo: só o rótulo público e o autor.
+  return { title: `${who} · ${page.topic.title}`, description: t("pp.hashNote") };
 }
 
-/** Página pública de um lacre: prova de que a pessoa falou antes. */
-export default async function SealPage({ params }: Props) {
+/** Página pública de uma previsão: a prova de que a pessoa falou antes. */
+export default async function PredictionProofPage({ params }: Props) {
   const { id } = await params;
-  const found = await getSeal(id);
-  if (!found) notFound();
-  const { seal, event } = found;
+  const page = await getPredictionPage(id);
+  if (!page) notFound();
+  const { topic, prediction } = page;
+  const { t } = await getT();
 
-  const viewer = await getCurrentUser();
-  const phase = phaseOf(event);
-  const isOwner = viewer?.id === seal.user_id;
+  const revealed = topic.revealed;
+  const refDate = topic.resolved_at ?? topic.revealed_at ?? topic.reveal_at;
+  const leadDays = revealed && refDate ? Math.floor((+new Date(refDate) - +new Date(prediction.created_at) + 60_000) / 86_400_000) : null;
+  const leadText = leadDays === null ? null : leadDays >= 2 ? t("pp.lead", { days: leadDays }) : leadDays === 1 ? t("pp.leadOne") : t("pp.leadSame");
+  const author = prediction.author;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="card relative overflow-hidden p-6 text-center sm:p-10">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-wax/15 via-transparent to-transparent" />
-        <SealMark size={84} className="mx-auto drop-shadow-[0_12px_34px_rgba(255,79,109,0.55)]" />
-        <p className="mt-5 text-sm font-semibold uppercase tracking-widest text-gold">
-          {phase === "resolved" ? "Palpite revelado" : "Palpite lacrado"}
-        </p>
-        <h1 className="mt-3 text-2xl font-extrabold leading-snug tracking-tight text-balance sm:text-3xl">{event.title}</h1>
+      <div className="ink-block rounded-[2rem] p-6 text-center sm:p-10">
+        <Tag tone="signal">{revealed ? t("pp.revealed") : t("pp.sealed")}</Tag>
+        <h1 className="display mt-5 text-[clamp(2.4rem,9vw,4.6rem)] text-balance">{topic.title}</h1>
 
-        {seal.profile && (
-          <Link href={`/u/${seal.profile.handle}`} className="mt-5 inline-flex items-center gap-2.5 rounded-full border border-line bg-white/[0.04] py-1.5 pl-1.5 pr-4 text-sm hover:bg-white/[0.08]">
-            <Avatar name={seal.profile.display_name} src={seal.profile.avatar_url} size={28} />
-            <span>
-              <b>{seal.profile.display_name}</b> <span className="text-muted">lacrou {timeAgo(seal.created_at)}</span>
-            </span>
+        {author && (
+          <Link href={`/u/${author.handle}`} className="mt-6 inline-flex items-center gap-2.5 rounded-full border border-paper/40 py-1.5 pl-1.5 pr-4 text-sm hover:bg-paper/10">
+            <Avatar name={author.display_name} src={author.avatar_url} size={30} />
+            <span>{t("pp.by", { name: author.display_name, when: timeAgo(prediction.created_at, t) })}</span>
           </Link>
         )}
+        {leadText && <div className="display mt-6 text-5xl text-signal sm:text-6xl">{leadText}</div>}
 
-        <div className="mt-5 flex justify-center">
-          <HashPill hash={seal.commitment} />
+        <div className="mt-6 flex justify-center">
+          <HashPill hash={prediction.commitment} className="!border-paper/40 !bg-transparent" />
         </div>
-        <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-faint">
-          Hash SHA-256 gerado no momento do lacre. Se qualquer detalhe do palpite mudar depois, o hash não vai bater na revelação.
-        </p>
+        <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-paper/60">{t("pp.hashNote")}</p>
       </div>
 
-      {phase === "resolved" && seal.prediction && <PredictionCard prediction={seal.prediction} event={event} author={seal.profile} />}
+      {prediction.held && <p className="sheet p-5 text-sm font-medium">{t("pp.held")}</p>}
+      {!prediction.held && prediction.body !== undefined && revealed && <PredictionCard prediction={prediction} topic={topic} author={author} />}
 
-      {phase !== "resolved" && (
-        <div className="card flex items-start gap-3 p-5 text-sm">
-          <Lock size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden />
-          <div className="text-muted">
-            <p>
-              <b className="text-fg">O conteúdo está trancado.</b> Ele será revelado para todo mundo quando o evento for resolvido.
-            </p>
-            <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarClock size={14} aria-hidden /> Prazo: {formatDateTime(event.locks_at)}
-              </span>
-              {phase === "open" && (
-                <span>
-                  fecha em <Countdown to={event.locks_at} className="font-mono font-semibold text-gold" />
-                </span>
-              )}
-            </p>
-          </div>
+      {!revealed && (
+        <div className="sheet flex items-start gap-3 p-5 text-sm">
+          <Lock size={18} className="mt-0.5 shrink-0" aria-hidden />
+          <p>{t("pp.locked")}</p>
         </div>
       )}
 
-      {isOwner && seal.prediction && phase !== "resolved" && (
+      {!revealed && prediction.mine && prediction.body !== undefined && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold text-muted">Só você vê isto:</h2>
-          <PredictionCard prediction={seal.prediction} event={event} />
+          <h2 className="kicker mb-3 text-muted">{t("pp.only")}</h2>
+          <PredictionCard prediction={prediction} topic={topic} />
         </div>
       )}
 
       <div className="flex flex-wrap justify-center gap-3">
-        {isOwner && (
-          <ShareButton path={`/p/${seal.id}`} text={`Lacrei meu palpite sobre “${event.title}”. Só revelo depois que acontecer. 🔒`} label="Compartilhar minha prova" primary />
+        {prediction.mine && (
+          <ShareButton path={`/p/${prediction.id}`} text={t("topic.shareProofText", { title: topic.title })} label={t("topic.shareProof")} copiedLabel={t("share.copied")} primary />
         )}
-        {phase === "open" ? (
-          <Link href={`/eventos/${event.id}`} className={isOwner ? "btn-ghost rounded-xl px-5 py-3 text-sm font-semibold" : "btn-primary rounded-xl px-6 py-3.5 text-sm"}>
-            {isOwner ? "Ver evento" : "Lacrar o meu palpite"}
-          </Link>
-        ) : (
-          <Link href={`/eventos/${event.id}`} className="btn-ghost rounded-xl px-5 py-3 text-sm font-semibold">
-            Ver o evento
-          </Link>
-        )}
+        <Link href={`/t/${topic.id}`} className={prediction.mine ? "btn btn-line px-5 py-3.5 text-sm" : "btn btn-signal px-6 py-3.5 text-sm"}>
+          {prediction.mine || revealed ? t("pp.event") : t("pp.cta")}
+        </Link>
       </div>
     </div>
   );

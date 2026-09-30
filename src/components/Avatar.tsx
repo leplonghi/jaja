@@ -1,18 +1,7 @@
 import Image from "next/image";
 import { cn, initials } from "@/lib/format";
 
-export function Avatar({
-  name,
-  src,
-  size = 36,
-  className,
-}: {
-  name: string;
-  src?: string | null;
-  size?: number;
-  className?: string;
-}) {
-  const style = { width: size, height: size, fontSize: Math.max(11, size * 0.38) };
+export function Avatar({ name, src, size = 36, className }: { name: string; src?: string | null; size?: number; className?: string }) {
   if (src) {
     return (
       <Image
@@ -22,7 +11,7 @@ export function Avatar({
         height={size}
         unoptimized
         referrerPolicy="no-referrer"
-        className={cn("rounded-full object-cover ring-1 ring-white/15", className)}
+        className={cn("rounded-full border-[1.5px] border-ink object-cover", className)}
         style={{ width: size, height: size }}
       />
     );
@@ -30,11 +19,8 @@ export function Avatar({
   return (
     <span
       aria-label={name}
-      style={style}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-iris/70 to-wax/70 font-semibold text-white ring-1 ring-white/15",
-        className,
-      )}
+      style={{ width: size, height: size, fontSize: Math.max(11, size * 0.38) }}
+      className={cn("inline-flex shrink-0 items-center justify-center rounded-full border-[1.5px] border-ink bg-signal font-bold text-ink", className)}
     >
       {initials(name)}
     </span>

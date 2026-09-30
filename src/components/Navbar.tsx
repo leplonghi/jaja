@@ -1,65 +1,71 @@
 import Link from "next/link";
-import { Compass, Lock, Plus, Trophy, Home } from "lucide-react";
-import { getCurrentUser } from "@/lib/data";
+import { Compass, Home, Lock, Plus, Trophy } from "lucide-react";
+import { getT } from "@/i18n/server";
+import { getViewer } from "@/lib/data";
 import { Avatar } from "./Avatar";
 import { Logo } from "./Logo";
 
-const links = [
-  { href: "/eventos", label: "Explorar" },
-  { href: "/ranking", label: "Ranking" },
-  { href: "/cofre", label: "Meu cofre" },
-];
-
 export async function Navbar() {
-  const user = await getCurrentUser();
+  const [{ t }, viewer] = await Promise.all([getT(), getViewer()]);
+  const links = [
+    { href: "/explore", label: t("nav.explore") },
+    { href: "/ranking", label: t("nav.ranking") },
+    { href: "/vault", label: t("nav.vault") },
+  ];
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-line bg-ink/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b-[1.5px] border-ink bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" aria-label="Lacre — página inicial">
-            <Logo />
+          <Link href="/" aria-label={`${t("brand.name")} — ${t("nav.home")}`}>
+            <Logo size={34} />
           </Link>
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Principal">
+          <nav className="hidden items-center gap-1 md:flex" aria-label={t("nav.main")}>
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-sm font-medium text-muted transition hover:bg-white/5 hover:text-fg">
+              <Link key={l.href} href={l.href} className="rounded-full px-4 py-2 text-sm font-medium transition hover:bg-ink hover:text-paper">
                 {l.label}
               </Link>
             ))}
+            {viewer?.is_staff && (
+              <Link href="/admin" className="rounded-full px-4 py-2 text-sm font-medium text-signal-deep transition hover:bg-ink hover:text-paper">
+                {t("nav.admin")}
+              </Link>
+            )}
           </nav>
           <div className="flex items-center gap-2">
-            <Link href="/eventos/novo" className="btn-ghost hidden items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold sm:inline-flex">
-              <Plus size={16} aria-hidden /> Criar evento
+            <Link href="/new" className="btn btn-signal hidden px-4 py-2.5 text-sm sm:inline-flex">
+              <Plus size={16} aria-hidden /> {t("nav.new")}
             </Link>
-            {user ? (
-              <div className="group relative">
-                <Link href={`/u/${user.handle}`} aria-label="Meu perfil" className="block rounded-full">
-                  <Avatar name={user.display_name} src={user.avatar_url} size={38} />
+            {viewer ? (
+              <>
+                <Link href={`/u/${viewer.handle}`} aria-label={t("nav.profile")} className="block rounded-full">
+                  <Avatar name={viewer.display_name} src={viewer.avatar_url} size={38} />
                 </Link>
-              </div>
+                <form action="/auth/signout" method="post" className="hidden md:block">
+                  <button type="submit" className="rounded-full px-3 py-2 text-sm font-medium text-muted transition hover:bg-ink hover:text-paper">
+                    {t("nav.logout")}
+                  </button>
+                </form>
+              </>
             ) : (
-              <Link href="/login" className="btn-primary rounded-xl px-4 py-2 text-sm">
-                Entrar
+              <Link href="/login" className="btn btn-ink px-4 py-2.5 text-sm">
+                {t("nav.login")}
               </Link>
             )}
           </div>
         </div>
       </header>
 
-      {/* Navegação inferior no celular */}
-      <nav
-        aria-label="Navegação móvel"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
-      >
-        <ul className="mx-auto grid max-w-md grid-cols-5 items-center px-2 py-1.5 text-[11px] font-medium text-muted">
-          <MobileLink href="/" label="Início" Icon={Home} />
-          <MobileLink href="/eventos" label="Explorar" Icon={Compass} />
+      <nav aria-label={t("nav.mobile")} className="fixed inset-x-0 bottom-0 z-40 border-t-[1.5px] border-ink bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        <ul className="mx-auto grid max-w-md grid-cols-5 items-center px-2 py-1.5 text-[11px] font-medium">
+          <MobileLink href="/" label={t("nav.home")} Icon={Home} />
+          <MobileLink href="/explore" label={t("nav.explore")} Icon={Compass} />
           <li className="flex justify-center">
-            <Link href="/eventos/novo" aria-label="Criar evento" className="btn-primary -mt-6 grid size-12 place-items-center rounded-full">
-              <Plus size={22} aria-hidden />
+            <Link href="/new" aria-label={t("nav.new")} className="btn btn-signal -mt-7 size-14">
+              <Plus size={24} aria-hidden />
             </Link>
           </li>
-          <MobileLink href="/cofre" label="Cofre" Icon={Lock} />
-          <MobileLink href="/ranking" label="Ranking" Icon={Trophy} />
+          <MobileLink href="/vault" label={t("nav.vault")} Icon={Lock} />
+          <MobileLink href="/ranking" label={t("nav.ranking")} Icon={Trophy} />
         </ul>
       </nav>
     </>
@@ -69,7 +75,7 @@ export async function Navbar() {
 function MobileLink({ href, label, Icon }: { href: string; label: string; Icon: typeof Home }) {
   return (
     <li>
-      <Link href={href} className="flex flex-col items-center gap-0.5 rounded-lg py-1.5 transition hover:text-fg">
+      <Link href={href} className="flex flex-col items-center gap-0.5 rounded-lg py-1.5 transition hover:text-signal-deep">
         <Icon size={20} aria-hidden />
         {label}
       </Link>

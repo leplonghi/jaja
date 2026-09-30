@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { SealMark } from "@/components/Logo";
+import { getT } from "@/i18n/server";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await getT();
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center pt-16 text-center">
-      <SealMark size={72} className="opacity-70 grayscale" />
-      <h1 className="mt-6 text-3xl font-extrabold tracking-tight">Nada por aqui</h1>
-      <p className="mt-2 text-muted">Esse lacre não existe, ou a página foi movida.</p>
-      <Link href="/" className="btn-primary mt-8 rounded-xl px-6 py-3 text-sm">
-        Voltar ao início
+    <div className="mx-auto flex max-w-xl flex-col items-center pt-10 text-center">
+      <div className="display text-[clamp(8rem,30vw,16rem)] text-signal [text-shadow:0.03em_0.03em_0_var(--color-ink)]">404</div>
+      <h1 className="display-mid -mt-4 text-4xl">{t("nf.title")}</h1>
+      <p className="mt-3 text-muted">{t("nf.body")}</p>
+      <Link href="/" className="btn btn-signal mt-8 px-7 py-3.5 text-sm">
+        {t("nf.cta")}
       </Link>
     </div>
   );
