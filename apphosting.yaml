@@ -9,9 +9,11 @@ runConfig:
   maxInstances: 10
   concurrency: 80
 
-# Preencha e descomente. As NEXT_PUBLIC_* são embutidas no build (BUILD).
-# São valores públicos por natureza (URL do projeto e chave publishable/anon);
+# O bloco abaixo é preenchido por `npm run setup` (ou à mão: descomente e edite).
+# As NEXT_PUBLIC_* são embutidas no build (BUILD). São valores públicos por
+# natureza (URL do projeto e chave publishable/anon);
 # NUNCA coloque aqui a chave service_role do Supabase.
+# --- env:begin
 #
 # env:
 #   - variable: NEXT_PUBLIC_SUPABASE_URL
@@ -26,3 +28,4 @@ runConfig:
 #   - variable: MIN_AGE_BR
 #     value: "18"
 #     availability: [RUNTIME]
+# --- env:end

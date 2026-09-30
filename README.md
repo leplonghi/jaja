@@ -73,6 +73,8 @@ insert into public.moderation_terms (term) values ('exemplo de termo');
 
 ### 4) Deploy (Firebase App Hosting)
 
+> **Guia completo, passo a passo e com links: [`docs/DEPLOY.md`](docs/DEPLOY.md).** Resumo: `npm run setup` (assistente) e `FIREBASE_PROJECT=seu-id npm run deploy`.
+
 O app precisa de servidor (Server Actions, cookies de sessão, rota `/api/live` e cards sociais dinâmicos), então o **Firebase Hosting clássico (estático) não serve**. O caminho é o **Firebase App Hosting**, que roda Next.js em Cloud Run. A própria documentação do Next 16 o lista como integração de plataforma **não verificada** pela equipe do Next ("feature support and compatibility may vary"); teste o primeiro deploy antes de confiar nele.
 
 Deploy com um comando, a partir do código local (sem precisar conectar o GitHub). `firebase.json` e `scripts/deploy-firebase.sh` já estão prontos; o `firebase.json` foi validado contra o esquema do `firebase-tools` 15, e o script teve a sintaxe e as travas testadas. **O deploy real não foi executado** (exige login na sua conta Google).
@@ -80,7 +82,7 @@ Deploy com um comando, a partir do código local (sem precisar conectar o GitHub
 O que **só você pode fazer** (credenciais e faturamento são seus):
 
 1. No [console do Firebase](https://console.firebase.google.com), crie ou escolha um projeto e verifique o plano exigido. Pelo que encontrei em buscas (não consegui abrir a página oficial daqui), o App Hosting exige o plano **Blaze** (pago por uso); confirme o requisito e os preços vigentes em firebase.google.com antes de ativar.
-2. Preencha e descomente o bloco `env:` do `apphosting.yaml` (URL e chave *publishable* do Supabase, `NEXT_PUBLIC_SITE_URL`). As `NEXT_PUBLIC_*` são embutidas no build.
+2. Rode `npm run setup`: ele pede a URL e a chave *publishable* do Supabase, valida, grava o `.env.local` e o bloco `env:` do `apphosting.yaml` e (com `DATABASE_URL`) aplica a migração. As `NEXT_PUBLIC_*` são embutidas no build.
 3. Autentique uma vez: `npx firebase-tools@15 login` (ou, sem navegador, `GOOGLE_APPLICATION_CREDENTIALS` apontando para uma conta de serviço).
 4. Rode: `FIREBASE_PROJECT=seu-projeto-id ./scripts/deploy-firebase.sh`. Ele confere o `apphosting.yaml`, roda typecheck, lint e testes e faz o deploy (na primeira vez cria o backend `jaja` e pede a região).
 5. Com a URL gerada: ajuste `NEXT_PUBLIC_SITE_URL`, cadastre `https://SUA-URL/auth/callback` em **Supabase → Authentication → URL Configuration → Redirect URLs** e faça novo deploy.
